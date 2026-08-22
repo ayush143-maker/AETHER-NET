@@ -11,8 +11,14 @@ import {
 /**
  * Main Orchestration Hub
  * Manages global state, tab navigation, and trace pipeline
+ * 
+ * VERCEL DEPLOYMENT NOTE: Uses /api/proxy serverless function
+ * for CORS-free GeoIP resolution
  */
 export default function App() {
+  // ============================================
+  // GLOBAL STATE MANAGEMENT
+  // ============================================
   const [activeTab, setActiveTab] = useState('matrix');
   const [searchQuery, setSearchQuery] = useState('');
   const [networkData, setNetworkData] = useState(null);
@@ -21,8 +27,10 @@ export default function App() {
   const [systemStatus, setSystemStatus] = useState('IDLE');
   const [validationError, setValidationError] = useState('');
   const [matrixRain, setMatrixRain] = useState([]);
-  
-  // Generate matrix rain background columns
+
+  // ============================================
+  // MATRIX RAIN BACKGROUND EFFECT
+  // ============================================
   useEffect(() => {
     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ<>/{}[]';
     const columns = Array.from({ length: 15 }, (_, i) => ({
@@ -35,48 +43,58 @@ export default function App() {
     }));
     setMatrixRain(columns);
   }, []);
-  
+
+  // ============================================
+  // UTILITY FUNCTIONS
+  // ============================================
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
   const addLog = (message) => {
     setConsoleLogs(prev => [...prev, message]);
   };
-  
-  // Main trace pipeline
+
+  // ============================================
+  // MAIN TRACE PIPELINE
+  // ============================================
   const handleSearch = async (e) => {
     e.preventDefault();
-    
+
     const trimmed = searchQuery.trim();
     if (!trimmed) {
       setValidationError('Enter a target to begin trace');
       return;
     }
-    
+
     const validation = validateInput(trimmed);
     if (!validation.valid) {
       setValidationError('Invalid input. Use domain (google.com) or IPv4 (8.8.8.8)');
       return;
     }
-    
+
     setValidationError('');
     setSystemStatus('RESOLVING');
     setNetworkData(null);
     setRoutingHops(null);
     setConsoleLogs([]);
-    
+
     try {
-      // Phase 1: DNS Resolution
+      // ==========================================
+      // PHASE 1: DNS RESOLUTION
+      // ==========================================
       addLog(`> INITIATING DNS RESOLUTION FOR ${trimmed}`);
       addLog(`> QUERY TYPE: ${validation.type.toUpperCase()}`);
       await sleep(400);
-      
+
       addLog('> ESTABLISHING SECURE CONNECTION TO GEOIP API...');
+      addLog('> ROUTING THROUGH VERCEL EDGE PROXY');
       await sleep(300);
-      
+
       addLog('> SENDING A RECORD QUERY...');
       await sleep(250);
-      
+
       const metadata = await fetchDomainMetadata(trimmed);
       setNetworkData(metadata);
-      
+
       addLog('✓ DNS RESOLUTION COMPLETE');
       addLog(`├─ TARGET IP: ${metadata.ip}`);
       addLog(`├─ GEO: ${metadata.city}, ${metadata.region}, ${metadata.country}`);
@@ -84,46 +102,54 @@ export default function App() {
       addLog(`├─ ISP: ${metadata.isp}`);
       addLog(`└─ AS: ${metadata.as}`);
       await sleep(500);
-      
-      // Phase 2: Traceroute
+
+      // ==========================================
+      // PHASE 2: TRACEROUTE PIPELINE
+      // ==========================================
       setSystemStatus('TRACING');
       addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       addLog('> INITIATING MULTI-HOP TRACEROUTE PIPELINE');
       addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       await sleep(400);
-      
+
       const pipeline = generateTraceroutePipeline(
-        metadata.ip, metadata.lat, metadata.lon
+        metadata.ip,
+        metadata.lat,
+        metadata.lon
       );
-      
+
       addLog(`> SOURCE REGION: ${pipeline.sourceRegion}`);
       addLog(`> TARGET REGION: ${pipeline.targetRegion}`);
       addLog(`> PLANNED HOPS: ${pipeline.hops.length}`);
+      addLog(`> ESTIMATED DISTANCE: ${pipeline.totalDistance}km`);
       await sleep(300);
-      
-      // Stream hops progressively
+
+      // Stream hops progressively with visualization
       for (let i = 0; i < pipeline.hops.length; i++) {
         const hop = pipeline.hops[i];
         await sleep(450);
-        
+
         addLog('');
         addLog(`> HOP ${hop.hop}: ${hop.name}`);
         addLog(`  ├─ IP: ${hop.ip}`);
         addLog(`  ├─ LATENCY: ${hop.latency}ms`);
         addLog(`  ├─ ISP: ${hop.isp}`);
         if (hop.asn) addLog(`  ├─ ASN: ${hop.asn}`);
+        addLog(`  ├─ COORDS: ${hop.lat.toFixed(2)}°N, ${hop.lon.toFixed(2)}°E`);
         addLog(`  └─ TYPE: ${hop.type}`);
-        
+
         // Progressive map update
         setRoutingHops({
           ...pipeline,
           hops: pipeline.hops.slice(0, i + 1),
         });
       }
-      
+
       await sleep(400);
-      
-      // Phase 3: Complete
+
+      // ==========================================
+      // PHASE 3: COMPLETION
+      // ==========================================
       setSystemStatus('SUCCESS');
       addLog('');
       addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -131,22 +157,58 @@ export default function App() {
       addLog(`├─ TOTAL HOPS: ${pipeline.hops.length}`);
       addLog(`├─ TOTAL LATENCY: ${pipeline.totalLatency}ms`);
       addLog(`├─ TOTAL DISTANCE: ${pipeline.totalDistance}km`);
-      addLog(`└─ ESTIMATED THROUGHPUT: ${pipeline.throughput}Mbps`);
+      addLog(`├─ ESTIMATED THROUGHPUT: ${pipeline.throughput}Mbps`);
+      addLog(`└─ GATEWAY: ${pipeline.gateway}`);
       addLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       addLog('> ROUTE VISUALIZATION ACTIVE');
       addLog('> TELEMETRY STREAM ONLINE');
       addLog('> ENTER NEW TARGET TO RETRACE');
-      
+
       setRoutingHops(pipeline);
+
     } catch (error) {
+      // ==========================================
+      // ENHANCED ERROR HANDLING WITH DIAGNOSTICS
+      // ==========================================
       setSystemStatus('ERROR');
       addLog('');
-      addLog(`✗ ERROR: ${error.message}`);
+      addLog(`✗ CRITICAL ERROR: ${error.message}`);
+      addLog('');
+
+      // Diagnostic suggestions based on error type
+      if (error.message.includes('fetch') || error.message.includes('network')) {
+        addLog('├─ DIAGNOSIS: Network connectivity issue');
+        addLog('├─ CHECK 1: Verify internet connection');
+        addLog('├─ CHECK 2: Vercel serverless function may be cold-starting');
+        addLog('├─ CHECK 3: Try again in 10 seconds');
+        addLog('└─ CHECK 4: Inspect browser console for CORS errors');
+      } else if (error.message.includes('DNS') || error.message.includes('resolution')) {
+        addLog('├─ DIAGNOSIS: DNS resolution failed');
+        addLog('├─ CHECK 1: Verify domain spelling');
+        addLog('├─ CHECK 2: Domain may not exist');
+        addLog('└─ CHECK 3: Try a direct IP (8.8.8.8)');
+      } else if (error.message.includes('proxy') || error.message.includes('500')) {
+        addLog('├─ DIAGNOSIS: Proxy server error');
+        addLog('├─ CHECK 1: Vercel function may have failed');
+        addLog('├─ CHECK 2: Check Vercel dashboard logs');
+        addLog('└─ CHECK 3: ip-api.com may be rate-limited');
+      } else {
+        addLog('├─ DIAGNOSIS: Unknown error');
+        addLog('├─ CHECK: Open browser DevTools (F12)');
+        addLog('└─ CHECK: Review Network tab for failed requests');
+      }
+
+      addLog('');
       addLog('> TRACE TERMINATED');
       addLog('> SYSTEM STANDING BY');
+      
+      console.error('[App] Trace error:', error);
     }
   };
-  
+
+  // ============================================
+  // CLEAR TRACE DATA
+  // ============================================
   const handleClear = () => {
     setSearchQuery('');
     setNetworkData(null);
@@ -155,9 +217,10 @@ export default function App() {
     setSystemStatus('IDLE');
     setValidationError('');
   };
-  
-  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-  
+
+  // ============================================
+  // STATUS CONFIGURATION
+  // ============================================
   const statusConfig = {
     IDLE: { color: 'text-gray-500', icon: '⏸', label: 'STANDING BY' },
     RESOLVING: { color: 'text-yellow-400', icon: '⟳', label: 'RESOLVING DNS' },
@@ -165,10 +228,13 @@ export default function App() {
     SUCCESS: { color: 'text-green-400', icon: '✓', label: 'TRACE COMPLETE' },
     ERROR: { color: 'text-red-400', icon: '✗', label: 'TRACE FAILED' },
   };
-  
+
   const status = statusConfig[systemStatus];
   const isBusy = systemStatus === 'RESOLVING' || systemStatus === 'TRACING';
-  
+
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <div className="min-h-screen bg-[#05050a] text-white relative overflow-hidden">
       {/* Matrix rain background */}
@@ -187,10 +253,10 @@ export default function App() {
           </div>
         ))}
       </div>
-      
+
       {/* Gradient overlay */}
       <div className="fixed inset-0 pointer-events-none z-[1] bg-gradient-to-b from-transparent via-[#05050a]/80 to-[#05050a]" />
-      
+
       {/* Main container */}
       <div className="relative z-10 container mx-auto px-3 md:px-6 py-4 md:py-6 max-w-[1600px]">
         {/* Header */}
@@ -204,7 +270,7 @@ export default function App() {
                 GLOBAL ROUTING TELEMETRY & NETWORK ANALYTICS v3.2
               </p>
             </div>
-            
+
             <div className={`
               flex items-center gap-3 bg-black/80 border border-cyan-500/30 
               rounded-lg px-4 py-2 backdrop-blur-sm self-start md:self-auto
@@ -224,7 +290,7 @@ export default function App() {
               </div>
             </div>
           </div>
-          
+
           {/* Tab navigation */}
           <div className="flex gap-1 border-b border-cyan-500/20 mb-4">
             <button
@@ -258,7 +324,7 @@ export default function App() {
               </span>
             </button>
           </div>
-          
+
           {/* Search input */}
           <form onSubmit={handleSearch} className="relative">
             <div className="flex flex-col md:flex-row gap-2">
@@ -285,7 +351,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -301,7 +367,7 @@ export default function App() {
                     'Trace'
                   )}
                 </button>
-                
+
                 {networkData && (
                   <button
                     type="button"
@@ -315,7 +381,7 @@ export default function App() {
             </div>
           </form>
         </header>
-        
+
         {/* Main grid */}
         <main className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Tab content */}
@@ -326,13 +392,13 @@ export default function App() {
               <ThreatAnalytics networkData={networkData} routingHops={routingHops} />
             )}
           </div>
-          
+
           {/* Terminal console */}
           <div className="min-h-[400px] lg:min-h-[600px]">
             <TerminalConsole logs={consoleLogs} status={systemStatus} />
           </div>
         </main>
-        
+
         {/* Footer */}
         <footer className="mt-6 md:mt-8 text-center">
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[10px] text-gray-600 font-mono mb-2">
@@ -341,11 +407,11 @@ export default function App() {
               API: ip-api.com
             </span>
             <span>•</span>
+            <span>Proxy: Vercel Edge</span>
+            <span>•</span>
             <span>GeoIP Database v3.2</span>
             <span>•</span>
             <span>Traceroute Engine v2.1</span>
-            <span>•</span>
-            <span>Vercel Edge</span>
           </div>
           <div className="text-[10px] text-gray-700 font-mono">
             Built with React + Vite + Tailwind CSS • Network Intelligence Platform
