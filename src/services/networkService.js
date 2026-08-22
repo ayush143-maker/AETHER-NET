@@ -1,15 +1,7 @@
 /**
- * Network Service Layer — Enterprise Grade
- * Handles GeoIP resolution via HTTPS-proxied ip-api.com, 
- * traceroute pipeline simulation, and geospatial calculations.
- * 
- * VERCEL NOTE: ip-api.com free tier is HTTP-only. We route through
- * a CORS proxy so the HTTPS-deployed Vercel site can consume it.
+ * Network Service Layer — Vercel Native
+ * Uses local /api/proxy endpoint for CORS-free GeoIP resolution
  */
-
-// ============================================
-// GEOGRAPHIC DATABASES
-// ============================================
 
 const MAJOR_IXP_NODES = [
   { name: 'Frankfurt DE-CIX', lat: 50.1109, lon: 8.6821, region: 'EU', asn: 'AS24940' },
@@ -43,80 +35,59 @@ const LOCAL_GATEWAYS = [
   { name: 'Regional ISP Gateway • São Paulo', lat: -23.5505, lon: -46.6333, isp: 'Vivo Business' },
 ];
 
-// ============================================
-// HTTPS PROXY CONFIG (Vercel Deployment Fix)
-// ============================================
-
-const CORS_PROXIES = [
-  'https://corsproxy.io/?',
-  'https://api.allorigins.win/raw?url=',
-];
-
-async function fetchWithProxy(targetUrl) {
-  let lastError = null;
-  
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const proxiedUrl = proxy.includes('allorigins') 
-        ? `${proxy}${encodeURIComponent(targetUrl)}`
-        : `${proxy}${encodeURIComponent(targetUrl)}`;
-      
-      const response = await fetch(proxiedUrl, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (err) {
-      lastError = err;
-      console.warn(`Proxy ${proxy} failed:`, err.message);
-    }
-  }
-  
-  throw new Error(`All proxies failed. Last error: ${lastError?.message}`);
-}
-
-// ============================================
-// PUBLIC API METHODS
-// ============================================
-
 /**
- * Fetches metadata for a domain or IP address via ip-api.com
- * Uses HTTPS proxy to bypass Mixed Content restrictions on Vercel.
+ * Fetches metadata via local Vercel serverless proxy
+ * Endpoint: /api/proxy?target=<domain-or-ip>
  */
 export async function fetchDomainMetadata(target) {
-  const fields = 'status,message,country,countryCode,regionName,city,lat,lon,timezone,isp,org,as,query';
-  const targetUrl = `http://ip-api.com/json/${target}?fields=${fields}`;
+  const proxyUrl = `/api/proxy?target=${encodeURIComponent(target)}`;
   
-  const data = await fetchWithProxy(targetUrl);
+  console.log(`[NetworkService] Calling proxy: ${proxyUrl}`);
   
-  if (data.status === 'fail') {
-    throw new Error(data.message || 'DNS resolution failed');
+  try {
+    const response = await fetch(proxyUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Proxy returned ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.status === 'fail') {
+      throw new Error(data.message || 'DNS resolution failed');
+    }
+    
+    console.log('[NetworkService] Success:', data);
+    
+    return {
+      ip: data.query,
+      status: data.status,
+      country: data.country,
+      countryCode: data.countryCode,
+      region: data.regionName,
+      city: data.city,
+      lat: data.lat,
+      lon: data.lon,
+      timezone: data.timezone,
+      isp: data.isp,
+      org: data.org,
+      as: data.as,
+      _proxy: data._proxy, // Debug metadata
+    };
+    
+  } catch (error) {
+    console.error('[NetworkService] Error:', error);
+    throw new Error(`Network fetch failed: ${error.message}`);
   }
-  
-  return {
-    ip: data.query,
-    status: data.status,
-    country: data.country,
-    countryCode: data.countryCode,
-    region: data.regionName,
-    city: data.city,
-    lat: data.lat,
-    lon: data.lon,
-    timezone: data.timezone,
-    isp: data.isp,
-    org: data.org,
-    as: data.as,
-  };
 }
 
-/**
- * Haversine formula for great-circle distance in km
- */
 export function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -129,9 +100,6 @@ export function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-/**
- * Classifies geographic region for routing heuristic
- */
 function getRegion(lat, lon) {
   if (lat > 15 && lon > -170 && lon < -50) return 'NA';
   if (lat < 15 && lat > -60 && lon > -90 && lon < -30) return 'SA';
@@ -143,10 +111,6 @@ function getRegion(lat, lon) {
   return 'EU';
 }
 
-/**
- * Estimates optical fiber latency based on distance
- * Fiber speed: ~200,000 km/s (2/3 speed of light)
- */
 function estimateLatency(distanceKm) {
   const propagationMs = (distanceKm / 200000) * 1000;
   const routerHops = Math.random() * 4 + 2;
@@ -154,34 +118,24 @@ function estimateLatency(distanceKm) {
   return Math.round(propagationMs + processingMs + Math.random() * 2);
 }
 
-/**
- * Generates a random IPv4 address for simulation
- */
 function generateRandomIP() {
   return `${Math.floor(Math.random() * 223 + 1)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
 }
 
-/**
- * Primary traceroute pipeline generator
- * Produces 5-7 realistic intermediate hops from local gateway to target
- */
 export function generateTraceroutePipeline(targetIp, targetLat, targetLon) {
   const targetRegion = getRegion(targetLat, targetLon);
   const gateway = LOCAL_GATEWAYS[Math.floor(Math.random() * LOCAL_GATEWAYS.length)];
   const sourceRegion = getRegion(gateway.lat, gateway.lon);
   const totalDistance = calculateDistance(gateway.lat, gateway.lon, targetLat, targetLon);
   
-  // Build IXP route based on distance and region transitions
   let ixpChain = [];
   
   if (sourceRegion === targetRegion) {
-    // Same region — 1-2 local hops
     const localIXPs = MAJOR_IXP_NODES.filter(n => n.region === sourceRegion);
     if (localIXPs.length > 0) {
       ixpChain.push(localIXPs[Math.floor(Math.random() * localIXPs.length)]);
     }
   } else {
-    // Cross-region — source IXP → transit IXP → target IXP
     const sourceIXPs = MAJOR_IXP_NODES.filter(n => n.region === sourceRegion);
     const targetIXPs = MAJOR_IXP_NODES.filter(n => n.region === targetRegion);
     const transitIXPs = MAJOR_IXP_NODES.filter(
@@ -202,10 +156,8 @@ export function generateTraceroutePipeline(targetIp, targetLat, targetLon) {
     }
   }
   
-  // Cap at 5 intermediate nodes for performance
   ixpChain = ixpChain.slice(0, 5);
   
-  // Assemble final hop sequence
   const hops = [];
   
   hops.push({
@@ -265,9 +217,6 @@ export function generateTraceroutePipeline(targetIp, targetLat, targetLon) {
   };
 }
 
-/**
- * Validates user input as domain or IPv4
- */
 export function validateInput(input) {
   const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
   const ipv4Regex = /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
