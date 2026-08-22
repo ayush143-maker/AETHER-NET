@@ -1,0 +1,297 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   CYBERPUNK CORE THEME
+   ============================================ */
+:root {
+  --bg-primary: #05050a;
+  --bg-secondary: #0a0a14;
+  --neon-green: #00ff66;
+  --neon-cyan: #00f0ff;
+  --neon-magenta: #ff0055;
+  --neon-yellow: #ffcc00;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: #e0e0e0;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* ============================================
+   CUSTOM SCROLLBAR
+   ============================================ */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #00ff66 0%, #00f0ff 100%);
+  border-radius: 4px;
+  opacity: 0.6;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00f0ff 0%, #00ff66 100%);
+}
+
+/* ============================================
+   KEYFRAME ANIMATIONS
+   ============================================ */
+@keyframes route-flow {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -40; }
+}
+
+@keyframes ping-slow {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+  52% { opacity: 1; }
+  54% { opacity: 0.9; }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+@keyframes matrix-fall {
+  0% {
+    transform: translateY(-100%);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes counter-roll {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes data-stream {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+.animate-route-flow {
+  animation: route-flow 1.5s linear infinite;
+}
+
+.animate-ping-slow {
+  animation: ping-slow 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-flicker {
+  animation: flicker 3s linear infinite;
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* CRT scanline overlay effect */
+.crt-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 102, 0.03) 0px,
+    rgba(0, 255, 102, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Matrix rain column */
+.matrix-column {
+  position: absolute;
+  top: -100%;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: #00ff66;
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  animation: matrix-fall linear infinite;
+  opacity: 0.15;
+  pointer-events: none;
+  text-shadow: 0 0 4px #00ff66;
+}
+
+/* Neon glow text */
+.neon-text-green {
+  color: var(--neon-green);
+  text-shadow: 
+    0 0 4px rgba(0, 255, 102, 0.8),
+    0 0 8px rgba(0, 255, 102, 0.6),
+    0 0 12px rgba(0, 255, 102, 0.4);
+}
+
+.neon-text-cyan {
+  color: var(--neon-cyan);
+  text-shadow: 
+    0 0 4px rgba(0, 240, 255, 0.8),
+    0 0 8px rgba(0, 240, 255, 0.6),
+    0 0 12px rgba(0, 240, 255, 0.4);
+}
+
+.neon-text-magenta {
+  color: var(--neon-magenta);
+  text-shadow: 
+    0 0 4px rgba(255, 0, 85, 0.8),
+    0 0 8px rgba(255, 0, 85, 0.6);
+}
+
+/* Neon border glow */
+.neon-border-green {
+  border-color: var(--neon-green);
+  box-shadow: 
+    0 0 8px rgba(0, 255, 102, 0.3),
+    inset 0 0 8px rgba(0, 255, 102, 0.1);
+}
+
+.neon-border-cyan {
+  border-color: var(--neon-cyan);
+  box-shadow: 
+    0 0 8px rgba(0, 240, 255, 0.3),
+    inset 0 0 8px rgba(0, 240, 255, 0.1);
+}
+
+.neon-border-magenta {
+  border-color: var(--neon-magenta);
+  box-shadow: 
+    0 0 8px rgba(255, 0, 85, 0.3),
+    inset 0 0 8px rgba(255, 0, 85, 0.1);
+}
+
+/* Terminal panel */
+.terminal-panel {
+  background: 
+    radial-gradient(ellipse at top, rgba(0, 255, 102, 0.04) 0%, transparent 50%),
+    linear-gradient(180deg, #000000 0%, #050508 100%);
+  border: 1px solid rgba(0, 255, 102, 0.25);
+  box-shadow: 
+    0 0 20px rgba(0, 255, 102, 0.15),
+    inset 0 0 40px rgba(0, 0, 0, 0.8);
+}
+
+/* Data stream background */
+.data-stream-bg {
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ============================================
+   MOBILE OPTIMIZATIONS
+   ============================================ */
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .terminal-panel {
+    font-size: 11px;
+  }
+  
+  /* Disable heavy animations on low-end mobile */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Selection colors */
+::selection {
+  background: rgba(0, 240, 255, 0.3);
+  color: #ffffff;
+}
+
+/* Focus states for accessibility */
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 2px;
+}
